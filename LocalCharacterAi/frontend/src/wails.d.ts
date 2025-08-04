@@ -6,6 +6,8 @@ declare global{
             main:{
                 Chat:{
                     SendMessage(message: string): Promise<string>;
+                    GetHistory(): Promise<string>;
+                    openNewChat(): Promise <void>;
                 }
             }
         }

@@ -9,7 +9,9 @@ import (
 	"regexp"
 )
 
-type Chat struct{}
+type Chat struct {
+	History []Message
+}
 
 type OllamaRequest struct {
 	Response string `json:"response"`
@@ -17,14 +19,33 @@ type OllamaRequest struct {
 }
 
 func NewChat() *Chat {
-	return &Chat{}
+	history, err := loadHistory("chat_log.json")
+	if err != nil {
+		history = []Message{}
+	}
+	return &Chat{History: history}
 }
 
-func ApiRequest(message string) (string, error) {
+func historyToPromt(history []Message) string {
+	var prompt string
+	for _, msg := range history {
+		if msg.Role == "user" {
+			prompt += "User" + msg.Content + "\n"
+		} else {
+			prompt += "Assistant" + msg.Content + "\n"
+		}
+	}
+	return prompt
+}
+
+func ApiRequest(message string, history []Message) (string, error) {
+	fullHistory := append(history, Message{Role: "user", Content: message})
+	prompt := historyToPromt(fullHistory)
+
 	url := "http://localhost:11434/api/generate"
 	reqBody := map[string]interface{}{
 		"model":  "deepseek-r1:8b",
-		"prompt": message,
+		"prompt": prompt,
 		"stream": false,
 	}
 	jsonData, err := json.Marshal(reqBody)
@@ -65,12 +86,34 @@ func extractThink(input string) (think string, answer string) {
 	return
 }
 
+func (c *Chat) GetHistory() (string, error) {
+	data, err := json.Marshal(c.History)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+func openNewChat() {
+	fmt.Print("NewChat")
+}
+
 func (c *Chat) SendMessage(message string) (string, error) {
-	response, err := ApiRequest(message)
+	c.History = append(c.History, Message{Role: "user", Content: message})
+
+	response, err := ApiRequest(message, c.History)
 	if err != nil {
 		return "", err
 	}
 	think, answer := extractThink(response)
 	fmt.Println(think)
+
+	c.History = append(c.History, Message{Role: "assistant", Content: answer})
+
+	err = saveHistory("chat_log.json", c.History)
+	if err != nil {
+		return "", err
+	}
+
 	return answer, nil
 }

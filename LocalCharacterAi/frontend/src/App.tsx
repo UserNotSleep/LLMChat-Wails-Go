@@ -79,57 +79,63 @@ function App() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-
   const handleSendMessage = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     const messageText = inputMessage.trim();
     if (!messageText || isSending) return;
-
+  
     const tempMessageId = `temp-${Date.now()}`;
-    
+  
     const userMessage: Message = {
       id: tempMessageId,
       text: messageText,
       sender: 'user',
       timestamp: new Date(),
-      status: 'sending'
+      status: 'sending',
     };
-
+  
     setMessages(prev => [...prev, userMessage]);
     setInputMessage('');
     setIsSending(true);
-    
+  
     try {
       const response = await window.go.main.Chat.SendMessage(messageText);
-
-
-      setMessages(prev => prev.map(msg => 
-        msg.id === tempMessageId 
-          ? { ...msg, status: 'sent' as const } 
-          : msg
-      ));
-
+  
+      setMessages(prev =>
+        prev.map(msg =>
+          msg.id === tempMessageId ? { ...msg, status: 'sent' } : msg
+        )
+      );
+  
       const aiMessage: Message = {
         id: `ai-${Date.now()}`,
         text: response,
         sender: 'ai',
         timestamp: new Date(),
-        status: 'sent'
+        status: 'sent',
       };
-      
+  
       setMessages(prev => [...prev, aiMessage]);
     } catch (error) {
       console.error('Error sending message:', error);
-      setMessages(prev => prev.map(msg => 
-        msg.id === tempMessageId 
-          ? { ...msg, status: 'error' as const } 
-          : msg
-      ));
+      setMessages(prev =>
+        prev.map(msg =>
+          msg.id === tempMessageId ? { ...msg, status: 'error' } : msg
+        )
+      );
     } finally {
       setIsSending(false);
     }
   }, [inputMessage, isSending]);
 
+  const handleNewChat = async () => {
+    try {
+      await window.go.main.Chat.openNewChat();
+      setMessages([]);
+    } catch (error) {
+      console.error('Error creating new chat:', error);
+    }
+  };
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -138,6 +144,28 @@ function App() {
 
   useEffect(() => {
     inputRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    window.go.main.Chat.GetHistory()
+      .then((historyStr: string) => {
+        try {
+          const history = JSON.parse(historyStr) as { role: 'user' | 'assistant'; content: string }[];
+  
+          const formattedMessages = history.map((msg, i): Message => ({
+            id: i,
+            text: msg.content,
+            timestamp: new Date(),
+            status: 'sent'
+          }));
+  
+          setMessages(formattedMessages);
+        } catch (e) {
+          console.error('Ошибка парсинга истории:', e);
+          setMessages([]);
+        }
+      })
+      .catch((err: any) => console.error('Ошибка загрузки истории:', err));
   }, []);
 
 
@@ -158,13 +186,23 @@ function App() {
           animate={{ y: 0 }}
           transition={{ type: 'spring', stiffness: 300, damping: 20 }}
         >
-          <motion.h1
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2 }}
-          >
-            Чат-Бот 
-          </motion.h1>
+          <div className="header-content">
+            <motion.h1
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.2 }}
+            >
+              Чат-Бот 
+            </motion.h1>
+            <motion.button
+              className="new-chat-button"
+              onClick={handleNewChat}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              Новый чат
+            </motion.button>
+          </div>
         </motion.header>
         
         <div className="chat-container">
